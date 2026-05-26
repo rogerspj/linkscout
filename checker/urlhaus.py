@@ -5,86 +5,129 @@ Responsibility: fetch raw data from URLhaus and return it as a plain dict.
 No verdict logic lives here — core.py decides what "found" means.
 
 URLhaus is a community-curated feed of URLs used to distribute malware.
-It requires no API key for lookups.
+It supports two lookup modes, chosen by core.py based on what the caller submitted:
+  - check_url(url)      — URL-level: checks a specific full URL
+  - check_domain(domain) — host-level: checks all known malware URLs for a host
 """
 
 import os
 
 import httpx
 
-URLHAUS_API = "https://urlhaus-api.abuse.ch/v1/host/"
+URLHAUS_URL_API  = "https://urlhaus-api.abuse.ch/v1/url/"
+URLHAUS_HOST_API = "https://urlhaus-api.abuse.ch/v1/host/"
 REQUEST_TIMEOUT_SECONDS = 10.0
 
 
-def check_domain(domain: str) -> dict:
-    """
-    Query URLhaus for a domain/host.
+def _auth_key() -> str | None:
+    return os.environ.get("URLHAUS_AUTH_KEY")
 
-    Returns a dict with raw findings. This function never raises — errors come
-    back as status="error" so core.py can handle them.
+
+def _empty(status: str, level: str, error_msg: str | None = None) -> dict:
+    """Return a blank result dict with consistent structure."""
+    return {
+        "status": status,
+        "lookup_level": level,
+        "found": False,
+        "url_count": 0,
+        "threat_tags": [],
+        "urlhaus_reference": None,
+        "error_message": error_msg,
+    }
+
+
+def check_url(url: str) -> dict:
+    """
+    Query URLhaus at the URL level.
+
+    Checks whether THIS SPECIFIC URL (e.g. https://example.com/evil.exe) is in
+    URLhaus. Precise — a clean path on a dirty host comes back not-found, which
+    is why https://www.google.com should not inherit the host's reputation here.
+
+    Use this when the caller supplied a full URL.
 
     Returned fields:
-      status            : "ok" | "error" | "no_key"
-      found             : bool   — True if URLhaus has malware URLs for this host
-      url_count         : int    — number of malware URLs associated with this host
-      threat_tags       : list   — unique threat labels collected across all URLs
-                                   (e.g. "Emotet", "elf", "Mirai")
-      urlhaus_reference : str or None — link to the URLhaus page for this host
-      error_message     : str or None — explanation if status != "ok"
+      status          : "ok" | "error" | "no_key"
+      lookup_level    : always "url"
+      found           : bool   — True if this exact URL is in URLhaus
+      url_count       : 1 if found, 0 otherwise
+      threat_tags     : list[str] — tags on this specific URL
+      urlhaus_reference: str or None
+      error_message   : str or None
     """
-    auth_key = os.environ.get("URLHAUS_AUTH_KEY")
-    if not auth_key:
-        return {
-            "status": "no_key",
-            "found": False,
-            "url_count": 0,
-            "threat_tags": [],
-            "urlhaus_reference": None,
-            "error_message": "URLHAUS_AUTH_KEY is not set. Add it to your .env file.",
-        }
+    key = _auth_key()
+    if not key:
+        return _empty("no_key", "url", "URLHAUS_AUTH_KEY is not set. Add it to your .env file.")
 
     try:
-        # URLhaus uses form-encoded POST (not JSON).
-        # The Auth-Key header is required since they introduced authentication.
         response = httpx.post(
-            URLHAUS_API,
-            data={"host": domain},
-            headers={"Auth-Key": auth_key},
+            URLHAUS_URL_API,
+            data={"url": url},
+            headers={"Auth-Key": key},
             timeout=REQUEST_TIMEOUT_SECONDS,
         )
 
         if response.status_code != 200:
-            return {
-                "status": "error",
-                "found": False,
-                "url_count": 0,
-                "threat_tags": [],
-                "urlhaus_reference": None,
-                "error_message": f"URLhaus returned HTTP {response.status_code}.",
-            }
+            return _empty("error", "url", f"URLhaus returned HTTP {response.status_code}.")
 
         data = response.json()
-        query_status = data.get("query_status", "")
+        if data.get("query_status") == "no_results":
+            # This exact URL is not in URLhaus. Note: "not found" here is quite meaningful —
+            # URLhaus URL-level is precise, so a miss is a real clean signal for that path.
+            return _empty("ok", "url")
 
-        if query_status == "no_results":
-            # URLhaus doesn't have this domain in its malware feed.
-            # Note: this means "not in our feed", NOT "definitely safe".
-            # A brand-new phishing domain won't be in URLhaus yet.
-            return {
-                "status": "ok",
-                "found": False,
-                "url_count": 0,
-                "threat_tags": [],
-                "urlhaus_reference": None,
-                "error_message": None,
-            }
+        # URL is in URLhaus — gather tags.
+        tags = sorted(set(data.get("tags") or []))
+        return {
+            "status": "ok",
+            "lookup_level": "url",
+            "found": True,
+            "url_count": 1,
+            "threat_tags": tags,
+            "urlhaus_reference": data.get("urlhaus_reference"),
+            "error_message": None,
+        }
 
-        # Domain is in the URLhaus database — gather the details.
+    except httpx.TimeoutException:
+        return _empty("error", "url", "URLhaus URL lookup timed out (10 s).")
+    except Exception as exc:
+        return _empty("error", "url", f"URLhaus URL lookup failed: {exc}")
+
+
+def check_domain(domain: str) -> dict:
+    """
+    Query URLhaus at the host level.
+
+    Returns all known malware URLs associated with this domain. Less precise than
+    URL-level — the whole host's history is returned, not a specific path.
+
+    Use this when the caller supplied a bare domain (which is exactly what the
+    DNS resolver will supply next week).
+
+    Returned fields: same shape as check_url(), with lookup_level always "host".
+    """
+    key = _auth_key()
+    if not key:
+        return _empty("no_key", "host", "URLHAUS_AUTH_KEY is not set. Add it to your .env file.")
+
+    try:
+        response = httpx.post(
+            URLHAUS_HOST_API,
+            data={"host": domain},
+            headers={"Auth-Key": key},
+            timeout=REQUEST_TIMEOUT_SECONDS,
+        )
+
+        if response.status_code != 200:
+            return _empty("error", "host", f"URLhaus returned HTTP {response.status_code}.")
+
+        data = response.json()
+        if data.get("query_status") == "no_results":
+            # Not in the URLhaus host feed — means "not in our malware feed", NOT "definitely safe".
+            return _empty("ok", "host")
+
+        # Host is in URLhaus — gather URL count and tags.
         urls = data.get("urls", [])
-        url_count = len(urls)
-
-        # Collect unique threat tags from every URL entry.
-        # tags can be null on some entries, so we guard with "or []".
         tags: set[str] = set()
         for url_entry in urls:
             for tag in (url_entry.get("tags") or []):
@@ -92,28 +135,15 @@ def check_domain(domain: str) -> dict:
 
         return {
             "status": "ok",
+            "lookup_level": "host",
             "found": True,
-            "url_count": url_count,
+            "url_count": len(urls),
             "threat_tags": sorted(tags),
             "urlhaus_reference": data.get("urlhaus_reference"),
             "error_message": None,
         }
 
     except httpx.TimeoutException:
-        return {
-            "status": "error",
-            "found": False,
-            "url_count": 0,
-            "threat_tags": [],
-            "urlhaus_reference": None,
-            "error_message": "URLhaus request timed out (10 s).",
-        }
+        return _empty("error", "host", "URLhaus host lookup timed out (10 s).")
     except Exception as exc:
-        return {
-            "status": "error",
-            "found": False,
-            "url_count": 0,
-            "threat_tags": [],
-            "urlhaus_reference": None,
-            "error_message": f"URLhaus lookup failed: {exc}",
-        }
+        return _empty("error", "host", f"URLhaus host lookup failed: {exc}")
