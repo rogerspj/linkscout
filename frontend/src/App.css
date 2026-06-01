@@ -1,0 +1,415 @@
+/* ─── Reset ──────────────────────────────────────────────────────────────────
+   Browsers ship with their own default styles (margins, padding, font sizes)
+   that vary across Chrome/Firefox/Safari. These two rules neutralise the most
+   common differences so our layout behaves consistently everywhere.           */
+*, *::before, *::after {
+  box-sizing: border-box; /* padding and border included in element width/height */
+  margin: 0;
+  padding: 0;
+}
+
+/* ─── Design Tokens ──────────────────────────────────────────────────────────
+   CSS custom properties (variables) defined on :root are available to every
+   element on the page. Changing one value here updates every rule that uses it.
+   This is like defining constants at the top of a Python file.                */
+:root {
+  --color-bg:      #0d1117; /* deep near-black with a blue tint */
+  --color-surface: #161b22; /* slightly lighter — used for cards and inputs */
+  --color-border:  #30363d; /* subtle dividers and outlines */
+  --color-text:    #e6edf3; /* primary readable text */
+  --color-muted:   #8b949e; /* secondary / de-emphasised text */
+  --color-focus:   #388bfd; /* interactive accent — focus rings, links, buttons */
+
+  /* Per-source verdict colours — for the small verdict chips in the breakdown */
+  --c-malicious:  #f85149;
+  --c-suspicious: #d29922;
+  --c-safe:       #3fb950;
+  --c-unknown:    #8b949e;
+
+  --font: 'JetBrains Mono', 'Fira Mono', 'Courier New', monospace;
+  --radius-sm: 6px;
+  --radius-md: 10px;
+}
+
+/* ─── Base ───────────────────────────────────────────────────────────────────
+   The radial-gradient adds a very faint blue bloom from the top of the page —
+   breaks up the flat darkness without being distracting.                      */
+body {
+  font-family: var(--font);
+  background-color: var(--color-bg);
+  background-image: radial-gradient(
+    ellipse 80% 50% at 50% -5%,
+    rgba(56, 139, 253, 0.09) 0%,
+    transparent 70%
+  );
+  color: var(--color-text);
+  min-height: 100vh;
+  line-height: 1.6;
+}
+
+/* ─── Page Layout ────────────────────────────────────────────────────────────
+   Single centered column. 640px keeps lines short and forces focus on the
+   input — nothing else is competing for attention.                            */
+.page {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 3.5rem 1.5rem 5rem;
+}
+
+/* ─── Header ─────────────────────────────────────────────────────────────────  */
+.header {
+  text-align: center;
+  margin-bottom: 3rem;
+}
+
+.logo {
+  font-size: 2rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+/* A thin accent line under the logo — the only decorative element */
+.logo::after {
+  content: '';
+  display: block;
+  width: 2rem;
+  height: 2px;
+  background: var(--color-focus);
+  border-radius: 2px;
+  margin: 0.6rem auto 0;
+}
+
+.tagline {
+  color: var(--color-muted);
+  font-size: 0.82rem;
+  letter-spacing: 0.05em;
+  margin-top: 0.8rem;
+}
+
+/* ─── Search Box ─────────────────────────────────────────────────────────────
+   The input and button sit side-by-side in a flex row.
+   flex: 1 on the input makes it fill all remaining space after the button.    */
+.search-box {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.url-input {
+  flex: 1;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  color: var(--color-text);
+  font-family: var(--font);
+  font-size: 0.88rem;
+  padding: 0.8rem 1rem;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.url-input::placeholder {
+  color: var(--color-muted);
+}
+
+.url-input:focus {
+  border-color: var(--color-focus);
+}
+
+/* Red border when the validation error is active */
+.url-input--error {
+  border-color: #f85149;
+}
+
+.url-input:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.check-btn {
+  background: var(--color-focus);
+  border: none;
+  border-radius: var(--radius-sm);
+  color: #fff;
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 0.88rem;
+  font-weight: 600;
+  min-width: 80px;
+  padding: 0.8rem 1.5rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.15s ease, transform 0.1s ease;
+}
+
+.check-btn:hover:not(:disabled) {
+  opacity: 0.85;
+}
+
+.check-btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
+.check-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ─── Spinner ────────────────────────────────────────────────────────────────
+   A CSS-only rotating ring built from a circle with one coloured arc.
+   @keyframes defines the animation frames; animation: plays it.               */
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.spinner {
+  display: inline-block;
+  width: 15px;
+  height: 15px;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.65s linear infinite;
+}
+
+/* ─── Inline validation error ────────────────────────────────────────────────
+   Shown below the search box when the input is empty or obviously wrong.      */
+.error-inline {
+  color: #f85149;
+  font-size: 0.78rem;
+  margin-top: 0.5rem;
+}
+
+/* ─── Network / backend error card ──────────────────────────────────────────
+   Shown when the server is unreachable or returns error: true.                */
+.error-card {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  background: rgba(248, 81, 73, 0.08);
+  border: 1px solid rgba(248, 81, 73, 0.28);
+  border-radius: var(--radius-md);
+  margin-top: 1rem;
+  padding: 0.875rem 1rem;
+  font-size: 0.85rem;
+}
+
+.error-card__icon {
+  color: #f85149;
+  flex-shrink: 0;
+}
+
+.error-card__text {
+  flex: 1;
+  color: var(--color-text);
+}
+
+.error-card__retry {
+  background: none;
+  border: 1px solid rgba(248, 81, 73, 0.45);
+  border-radius: var(--radius-sm);
+  color: #f85149;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-family: var(--font);
+  font-size: 0.78rem;
+  padding: 0.3rem 0.7rem;
+  transition: background 0.15s ease;
+}
+
+.error-card__retry:hover {
+  background: rgba(248, 81, 73, 0.1);
+}
+
+/* ─── Result Card ────────────────────────────────────────────────────────────
+   Fades and slides up when it first appears.
+   @keyframes defines start → end states; animation: plays it once.            */
+@keyframes fadeSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.result-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  margin-top: 1.5rem;
+  overflow: hidden;
+  animation: fadeSlideIn 0.3s ease-out;
+}
+
+/* ─── Verdict Badge ──────────────────────────────────────────────────────────
+   --verdict-color is a CSS custom property set inline by App.jsx using:
+     style={{ '--verdict-color': '#f85149' }}
+   This lets one CSS rule handle all five verdicts without a separate class
+   for each. color-mix() adds a tinted background at 18% opacity of the colour. */
+.verdict-badge {
+  background: color-mix(in srgb, var(--verdict-color) 18%, transparent);
+  border-bottom: 3px solid var(--verdict-color);
+  color: var(--verdict-color);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  padding: 1rem 1.5rem;
+  text-align: center;
+}
+
+/* ─── Explanation ────────────────────────────────────────────────────────────  */
+.explanation {
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-text);
+  font-size: 0.875rem;
+  line-height: 1.75;
+  padding: 1.25rem 1.5rem;
+}
+
+/* ─── Source Breakdown ───────────────────────────────────────────────────────
+   Two columns side by side — VirusTotal on the left, URLhaus on the right.    */
+.sources {
+  border-bottom: 1px solid var(--color-border);
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+}
+
+.source-block {
+  padding: 1rem 1.5rem;
+}
+
+.source-block:first-child {
+  border-right: 1px solid var(--color-border);
+}
+
+.source-block__header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 0.4rem;
+}
+
+.source-block__name {
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+/* Per-source verdict chip — colour driven by a modifier class added in JSX */
+.source-block__verdict {
+  border-radius: var(--radius-sm);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  padding: 0.15rem 0.5rem;
+}
+
+.source-block__verdict--malicious {
+  background: color-mix(in srgb, var(--c-malicious) 15%, transparent);
+  color: var(--c-malicious);
+}
+.source-block__verdict--suspicious {
+  background: color-mix(in srgb, var(--c-suspicious) 15%, transparent);
+  color: var(--c-suspicious);
+}
+.source-block__verdict--safe {
+  background: color-mix(in srgb, var(--c-safe) 15%, transparent);
+  color: var(--c-safe);
+}
+.source-block__verdict--unknown {
+  background: color-mix(in srgb, var(--c-unknown) 15%, transparent);
+  color: var(--c-unknown);
+}
+
+.source-block__detail {
+  color: var(--color-text);
+  font-size: 0.82rem;
+}
+
+.source-block__detail--muted {
+  color: var(--color-muted);
+}
+
+/* ─── Threat Tags ────────────────────────────────────────────────────────────
+   Small chips shown when URLhaus has tagged a URL (e.g. "malware", "phishing") */
+.tags {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+  margin-left: 0.4rem;
+}
+
+.tag {
+  background: rgba(248, 81, 73, 0.13);
+  border: 1px solid rgba(248, 81, 73, 0.25);
+  border-radius: 4px;
+  color: #f85149;
+  font-size: 0.68rem;
+  padding: 0.1rem 0.4rem;
+}
+
+/* ─── Result Meta ────────────────────────────────────────────────────────────
+   The subtle footer row: URL, separator dot, live/cache indicator.            */
+.result-meta {
+  align-items: center;
+  border-bottom: 1px solid var(--color-border);
+  color: var(--color-muted);
+  display: flex;
+  font-size: 0.73rem;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  padding: 0.7rem 1.5rem;
+}
+
+.result-meta__url {
+  flex: 1;
+  min-width: 0; /* lets flexbox shrink past content width */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.result-meta__cache {
+  color: var(--color-focus);
+}
+
+/* ─── Reset Button ───────────────────────────────────────────────────────────  */
+.reset-btn {
+  background: none;
+  border: none;
+  color: var(--color-focus);
+  cursor: pointer;
+  font-family: var(--font);
+  font-size: 0.8rem;
+  padding: 0.875rem 1.5rem;
+  text-align: left;
+  transition: background 0.15s ease;
+  width: 100%;
+}
+
+.reset-btn:hover {
+  background: rgba(56, 139, 253, 0.06);
+}
+
+/* ─── Responsive ─────────────────────────────────────────────────────────────
+   On narrow screens, stack the source columns and let the input wrap below the
+   button. Nothing breaks — it just reflows.                                   */
+@media (max-width: 480px) {
+  .sources {
+    grid-template-columns: 1fr;
+  }
+
+  .source-block:first-child {
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .search-box {
+    flex-direction: column;
+  }
+}

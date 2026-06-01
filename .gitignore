@@ -22,3 +22,7 @@ env/
 dist/
 build/
 *.egg-info/
+
+# Node / React frontend — node_modules is like .venv, never commit it
+frontend/node_modules/
+frontend/dist/
