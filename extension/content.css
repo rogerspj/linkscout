@@ -1,0 +1,195 @@
+/*
+ * content.css — LinkScout browser extension popup styles.
+ *
+ * All rules are scoped under #linkscout-popup so they can never affect
+ * the host page's styles, no matter what CSS the page already has.
+ *
+ * Colour palette matches the React frontend (App.jsx VERDICT_META / App.css).
+ * position:fixed keeps the popup anchored to the viewport even when the page
+ * is scrolled. z-index is set to the maximum 32-bit integer so it appears
+ * above virtually any page element.
+ */
+
+#linkscout-popup {
+  /* Layout */
+  position: fixed;
+  z-index: 2147483647;
+  width: 300px;
+
+  /* Appearance */
+  background: #1e1e2e;
+  border: 1px solid #313244;
+  border-radius: 10px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
+
+  /* Typography defaults for everything inside the popup.
+     font-family and font-size are reset here so page styles don't bleed in. */
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+               'Helvetica Neue', Arial, sans-serif;
+  font-size: 13px;
+  line-height: 1.5;
+  color: #cdd6f4;
+
+  /* Prevent text selection inside the popup (it's a UI element, not content) */
+  user-select: none;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+
+#linkscout-popup .ls-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 12px;
+  border-bottom: 1px solid #313244;
+}
+
+#linkscout-popup .ls-logo {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  color: #6c7086;
+  text-transform: uppercase;
+}
+
+#linkscout-popup .ls-close {
+  /* Reset browser button defaults */
+  appearance: none;
+  background: none;
+  border: none;
+  padding: 2px 5px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  line-height: 1;
+  color: #6c7086;
+  font-family: inherit;
+}
+
+#linkscout-popup .ls-close:hover {
+  background: #313244;
+  color: #cdd6f4;
+}
+
+/* ── Body ────────────────────────────────────────────────────────────────── */
+
+#linkscout-popup .ls-body {
+  padding: 12px;
+}
+
+/* ── Loading state ───────────────────────────────────────────────────────── */
+
+#linkscout-popup .ls-loading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 0;
+  color: #6c7086;
+  font-size: 13px;
+}
+
+#linkscout-popup .ls-spinner {
+  display: inline-block;
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #313244;
+  border-top-color: #89b4fa;
+  border-radius: 50%;
+  animation: ls-spin 0.7s linear infinite;
+}
+
+@keyframes ls-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* ── Verdict badge ───────────────────────────────────────────────────────── */
+
+#linkscout-popup .ls-verdict {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 5px;
+  margin-bottom: 9px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.09em;
+  color: #fff;
+  /* --verdict-color is set inline by content.js from VERDICT_META */
+  background-color: var(--verdict-color, #8b949e);
+}
+
+/* ── Explanation text ────────────────────────────────────────────────────── */
+
+#linkscout-popup .ls-explanation {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #cdd6f4;
+  line-height: 1.6;
+}
+
+/* ── Domain age row ──────────────────────────────────────────────────────── */
+
+#linkscout-popup .ls-age {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding-top: 9px;
+  margin-top: 4px;
+  border-top: 1px solid #313244;
+  font-size: 12px;
+  color: #6c7086;
+}
+
+#linkscout-popup .ls-age-value {
+  font-weight: 600;
+  /* colour set inline from AGE_COLORS */
+}
+
+#linkscout-popup .ls-age-note {
+  color: #6c7086;
+}
+
+/* ── Footer ──────────────────────────────────────────────────────────────── */
+
+#linkscout-popup .ls-footer {
+  padding: 8px 12px 10px;
+  border-top: 1px solid #313244;
+}
+
+#linkscout-popup .ls-details-link {
+  color: #89b4fa;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 500;
+}
+
+#linkscout-popup .ls-details-link:hover {
+  text-decoration: underline;
+}
+
+/* ── Error state ─────────────────────────────────────────────────────────── */
+
+#linkscout-popup .ls-error {
+  padding: 10px 0 4px;
+  font-size: 12px;
+  color: #f38ba8;
+  line-height: 1.6;
+}
+
+#linkscout-popup .ls-retry {
+  display: inline-block;
+  margin-top: 9px;
+  padding: 4px 14px;
+  background: #313244;
+  border: 1px solid #45475a;
+  border-radius: 5px;
+  color: #cdd6f4;
+  cursor: pointer;
+  font-size: 12px;
+  font-family: inherit;
+}
+
+#linkscout-popup .ls-retry:hover {
+  background: #45475a;
+}

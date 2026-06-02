@@ -8,7 +8,7 @@
 //   - Think of it like FastAPI's response model: you describe what the output
 //     looks like for a given state, and the framework handles the rendering.
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 // API path — relative so the same build works in dev and production.
 // Dev:  Vite proxies /api/ → http://localhost:8000  (see vite.config.js)
@@ -59,53 +59,70 @@ export default function App() {
   const [inputError, setInputError] = useState('')    // inline validation message
   const [networkError, setNetworkError] = useState('') // fetch / server-level errors
 
-  async function handleCheck() {
-    // Wipe the previous result and any error before running a new check.
+  // ── Core fetch function ─────────────────────────────────────────────────────
+  // runCheck is deliberately separate from handleCheck so the mount effect
+  // below can call it without capturing handleCheck in a stale closure.
+  //
+  // It only depends on:
+  //   - API_URL       (module-level constant — never changes)
+  //   - setLoading / setResult / setNetworkError  (React state setters —
+  //     React guarantees these are stable references across all renders)
+  //
+  // Because none of those ever change, any closure over them is always fresh,
+  // and it's safe to call runCheck from a useEffect with empty deps [].
+  async function runCheck(targetUrl) {
+    setLoading(true)
     setResult(null)
     setNetworkError('')
-
-    // Client-side validation — fail fast before touching the network.
-    if (!url.trim()) {
-      setInputError('Please enter a URL or domain.')
-      return
-    }
-    if (!looksLikeUrl(url)) {
-      setInputError("That doesn't look like a URL. Try https://example.com")
-      return
-    }
-    setInputError('')
-
-    setLoading(true)
     try {
-      // fetch() is the browser's built-in HTTP client.
-      // async/await is just syntactic sugar over Promises — same as Python's asyncio.
       const response = await fetch(API_URL, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ url: url.trim() }),
+        body: JSON.stringify({ url: targetUrl }),
       })
-
-      // response.json() reads the response body and parses it as JSON.
       const data = await response.json()
-
-      // The backend sets error: true with a message field when it rejects input
-      // (e.g. a non-http scheme or a malformed domain). HTTP 422 also lands here
-      // because fetch() doesn't throw on 4xx — it only throws on network failures.
       if (data.error) {
         setNetworkError(data.message || 'The backend rejected this input.')
       } else {
         setResult(data)
       }
-    } catch (err) {
-      // fetch() throws if the network call itself fails — server not running,
-      // no internet connection, CORS blocked (before the response is received).
-      setNetworkError(
-        'Could not reach the LinkScout backend. Is it running on port 8000?'
-      )
+    } catch {
+      setNetworkError('Could not reach the LinkScout backend. Check that it is running.')
     } finally {
-      // finally runs whether the try succeeded or threw — good place to clean up.
       setLoading(false)
     }
+  }
+
+  // ── Mount effect: ?url= pre-fill ─────────────────────────────────────────────
+  // When the page loads with a ?url= query parameter (e.g. from the extension's
+  // "See full details" link), pre-fill the input and immediately run the check.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const prefilledUrl = params.get('url')?.trim()
+    if (!prefilledUrl || !looksLikeUrl(prefilledUrl)) return
+    setUrl(prefilledUrl)
+    runCheck(prefilledUrl)   // safe: runCheck only closes over stable references
+  }, []) // [] = run once on mount, never again
+
+  // ── Button / keyboard handler ────────────────────────────────────────────────
+  // Reads the url state, validates, then delegates the fetch to runCheck.
+  async function handleCheck() {
+    const targetUrl = url.trim()
+
+    setResult(null)
+    setNetworkError('')
+
+    if (!targetUrl) {
+      setInputError('Please enter a URL or domain.')
+      return
+    }
+    if (!looksLikeUrl(targetUrl)) {
+      setInputError("That doesn't look like a URL. Try https://example.com")
+      return
+    }
+    setInputError('')
+
+    await runCheck(targetUrl)
   }
 
   function handleReset() {
