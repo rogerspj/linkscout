@@ -269,6 +269,41 @@ body {
   padding: 1.25rem 1.5rem;
 }
 
+/* ─── Domain Age ─────────────────────────────────────────────────────────────
+   Sits between the main explanation and the per-source breakdown.
+   The age value gets its color from an inline style set in DomainAgeBlock —
+   no separate CSS class needed per label, same pattern as the verdict badge.  */
+.domain-age {
+  border-bottom: 1px solid var(--color-border);
+  padding: 0.875rem 1.5rem;
+}
+
+.domain-age__header {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.domain-age__label {
+  color: var(--color-muted);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.domain-age__value {
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.domain-age__note {
+  color: var(--color-muted);
+  font-size: 0.76rem;
+  line-height: 1.65;
+  margin-top: 0.35rem;
+}
+
 /* ─── Source Breakdown ───────────────────────────────────────────────────────
    Two columns side by side — VirusTotal on the left, URLhaus on the right.    */
 .sources {

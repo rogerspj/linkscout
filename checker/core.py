@@ -98,6 +98,9 @@ def check(target: str) -> dict:
             "verdict": None,
             "explanation": None,
             "sources": None,
+            "domain_age_days": None,
+            "domain_age_label": None,
+            "domain_age_note": None,
             "checked_at": _now_iso(),
             "from_cache": False,
         }
@@ -138,6 +141,10 @@ def check(target: str) -> dict:
     explanation = _explain(overall, vt_raw, vt_verdict, uh_raw, uh_verdict)
 
     # Step 8 — Build the result dict.
+    domain_age_days = vt_raw.get("domain_age_days")
+    creation_date_ts = vt_raw.get("creation_date")
+    domain_age_label, domain_age_note = _age_label_and_note(domain_age_days, creation_date_ts)
+
     result = {
         "error": False,
         "url": target,
@@ -148,6 +155,9 @@ def check(target: str) -> dict:
             "virustotal": {**vt_raw, "verdict": vt_verdict},
             "urlhaus": {**uh_raw, "verdict": uh_verdict},
         },
+        "domain_age_days": domain_age_days,
+        "domain_age_label": domain_age_label,
+        "domain_age_note": domain_age_note,
         "checked_at": _now_iso(),
         "from_cache": False,
     }
@@ -165,6 +175,58 @@ def check(target: str) -> dict:
 
 def _now_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
+
+
+def _age_label_and_note(
+    domain_age_days: int | None,
+    creation_date_ts: int | None,
+) -> tuple[str, str]:
+    """
+    Map domain_age_days to a (label, plain-English note) pair.
+
+    Labels: "unavailable" | "very_new" | "relatively_new" | "established"
+
+    Why these thresholds?
+      < 30 days  — highest-risk window for less sophisticated phishing campaigns
+      < 1 year   — worth noting but not alarming; many new domains are legitimate
+      ≥ 1 year   — age stops being a meaningful standalone risk signal
+    """
+    if domain_age_days is None:
+        return (
+            "unavailable",
+            "Domain registration date unavailable. This could mean the data hasn't been "
+            "collected yet, or the domain uses privacy protection on its WHOIS record.",
+        )
+
+    if domain_age_days < 30:
+        return (
+            "very_new",
+            f"This domain was registered {domain_age_days} day{'s' if domain_age_days != 1 else ''} ago. "
+            "Very new domains are sometimes used in phishing campaigns, "
+            "though many new domains are perfectly legitimate.",
+        )
+
+    if domain_age_days < 365:
+        months = domain_age_days // 30
+        return (
+            "relatively_new",
+            f"This domain was registered {domain_age_days} days ago (about {months} month{'s' if months != 1 else ''}). "
+            "Relatively new domains are worth a second look, but this alone is not a red flag.",
+        )
+
+    years = domain_age_days // 365
+    reg_year = (
+        datetime.fromtimestamp(creation_date_ts, tz=timezone.utc).year
+        if creation_date_ts is not None
+        else None
+    )
+    since_str = f"since {reg_year}" if reg_year else "registration date on record"
+    return (
+        "established",
+        f"This domain has been registered for {years} year{'s' if years != 1 else ''} ({since_str}). "
+        "An established registration history is a reassuring signal, "
+        "though it does not guarantee safety.",
+    )
 
 
 # Matches valid hostnames: example.com, sub.domain.co.uk

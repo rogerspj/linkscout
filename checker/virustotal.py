@@ -7,6 +7,8 @@ This keeps the threshold tuning in one obvious place.
 """
 
 import os
+from datetime import datetime, timezone
+
 import httpx
 
 VIRUSTOTAL_API_BASE = "https://www.virustotal.com/api/v3"
@@ -37,6 +39,8 @@ def check_domain(domain: str) -> dict:
             "suspicious": None,
             "total_engines": None,
             "permalink": None,
+            "creation_date": None,
+            "domain_age_days": None,
             "error_message": "VIRUSTOTAL_API_KEY is not set. Add it to your .env file.",
         }
 
@@ -56,6 +60,8 @@ def check_domain(domain: str) -> dict:
                 "suspicious": None,
                 "total_engines": None,
                 "permalink": None,
+                "creation_date": None,
+                "domain_age_days": None,
                 "error_message": (
                     "VirusTotal rate limit reached (free tier: ~4 req/min). "
                     "Wait a moment and try again — or check a different URL first."
@@ -71,6 +77,8 @@ def check_domain(domain: str) -> dict:
                 "suspicious": 0,
                 "total_engines": 0,
                 "permalink": f"https://www.virustotal.com/gui/domain/{domain}",
+                "creation_date": None,
+                "domain_age_days": None,
                 "error_message": None,
             }
 
@@ -81,6 +89,8 @@ def check_domain(domain: str) -> dict:
                 "suspicious": None,
                 "total_engines": None,
                 "permalink": None,
+                "creation_date": None,
+                "domain_age_days": None,
                 "error_message": f"VirusTotal returned unexpected HTTP {response.status_code}.",
             }
 
@@ -96,12 +106,22 @@ def check_domain(domain: str) -> dict:
         timeout = stats.get("timeout", 0)
         total = malicious + suspicious + harmless + undetected + timeout
 
+        # creation_date is a Unix timestamp from WHOIS data. May be None if VT
+        # hasn't collected WHOIS for this domain (privacy-protected or just never scraped).
+        creation_date_ts = attrs.get("creation_date")  # int (Unix seconds) or None
+        domain_age_days = None
+        if creation_date_ts is not None:
+            registered_at = datetime.fromtimestamp(creation_date_ts, tz=timezone.utc)
+            domain_age_days = (datetime.now(timezone.utc) - registered_at).days
+
         return {
             "status": "ok",
             "malicious": malicious,
             "suspicious": suspicious,
             "total_engines": total,
             "permalink": f"https://www.virustotal.com/gui/domain/{domain}",
+            "creation_date": creation_date_ts,
+            "domain_age_days": domain_age_days,
             "error_message": None,
         }
 
@@ -112,6 +132,8 @@ def check_domain(domain: str) -> dict:
             "suspicious": None,
             "total_engines": None,
             "permalink": None,
+            "creation_date": None,
+            "domain_age_days": None,
             "error_message": "VirusTotal request timed out (10 s). The service may be slow.",
         }
     except Exception as exc:
@@ -121,5 +143,7 @@ def check_domain(domain: str) -> dict:
             "suspicious": None,
             "total_engines": None,
             "permalink": None,
+            "creation_date": None,
+            "domain_age_days": None,
             "error_message": f"VirusTotal lookup failed: {exc}",
         }
