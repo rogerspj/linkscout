@@ -42,7 +42,10 @@ app = FastAPI(
 # Never use allow_origins=["*"] in production — it lets any website call your API.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Vite dev server — tighten before EC2 deploy
+    allow_origins=[
+        "http://localhost:5173",      # local Vite dev server
+        "http://18.144.144.119",      # EC2 production server
+    ],
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )

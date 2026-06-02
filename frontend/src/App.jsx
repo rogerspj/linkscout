@@ -10,10 +10,10 @@
 
 import { useState } from 'react'
 
-// The backend URL. Vite's dev server runs on :5173, FastAPI on :8000.
-// We call the FastAPI backend directly from the browser — the React app itself
-// is just HTML/CSS/JS files served by Vite; it has no server-side logic.
-const API_URL = 'http://localhost:8000/check'
+// API path — relative so the same build works in dev and production.
+// Dev:  Vite proxies /api/ → http://localhost:8000  (see vite.config.js)
+// Prod: nginx proxies /api/ → http://127.0.0.1:8001 (FastAPI on EC2)
+const API_URL = '/api/check'
 
 // Verdict display metadata: the color and label for each of the five outcomes.
 // These match the five string values that checker/core.py can return.
