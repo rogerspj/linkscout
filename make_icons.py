@@ -1,68 +1,164 @@
 """
-make_icons.py — generate placeholder PNG icons for the browser extension.
+make_icons.py - generate PNG icons for the browser extension.
 
-Creates solid dark-colored squares (matching the extension's popup background)
-for all three required sizes. Uses only Python's standard library — no Pillow.
+With Pillow installed  →  magnifying glass on a dark background.
+Without Pillow         →  graceful fallback: dark square with a pixel-art
+                          magnifying glass drawn in raw bytes (no extra deps).
 
-Run once before loading the extension:
+Run once before loading the extension in Chrome:
+    python make_icons.py
+
+If Pillow is not installed and you want the nicer version:
+    pip install Pillow
     python make_icons.py
 """
 
+import math
 import os
 import struct
 import zlib
 
+OUTPUT_DIR = 'extension/icons'
+SIZES      = (16, 48, 128)
 
-def make_png(size: int, r: int = 30, g: int = 30, b: int = 46) -> bytes:
+# Palette - matches the extension popup theme
+BG_COLOR   = (30,  30,  46)   # #1e1e2e  dark navy background
+FG_COLOR   = (200, 210, 244)  # #cdd6f4  light blue-white foreground
+
+
+# ── Pillow path (nice, anti-aliased) ──────────────────────────────────────────
+
+def _draw_with_pillow(size: int):
     """
-    Build a minimal valid RGB PNG of `size x size` pixels in one solid colour.
+    Draw a magnifying glass using Pillow.
+    Returns a PIL Image, or None if Pillow is not installed.
+    """
+    try:
+        from PIL import Image, ImageDraw
+    except ImportError:
+        return None
 
-    A PNG file is a sequence of chunks.  Each chunk has:
-        4 bytes  — data length
-        4 bytes  — chunk type (ASCII)
-        N bytes  — data
-        4 bytes  — CRC32 of (type + data)
+    img  = Image.new('RGB', (size, size), BG_COLOR)
+    draw = ImageDraw.Draw(img)
 
-    The three chunks we need:
-        IHDR  — image metadata (width, height, bit depth, colour type…)
-        IDAT  — compressed pixel data
-        IEND  — end-of-file marker
+    # The lens circle occupies roughly the upper-left 55% of the canvas;
+    # the handle runs at 45° from the lens edge to the lower-right corner.
+    margin = max(1, round(size * 0.10))
+    radius = round(size * 0.27)
+    cx     = margin + radius          # lens centre x
+    cy     = margin + radius          # lens centre y
+    stroke = max(1, round(size * 0.10))
 
-    Raw pixel data for each row is: one filter byte (0 = None) + RGB triplets.
-    We compress it with zlib before writing to IDAT.
+    # Lens outline
+    draw.ellipse(
+        [cx - radius, cy - radius, cx + radius, cy + radius],
+        outline=FG_COLOR,
+        width=stroke,
+    )
+
+    # Handle - from 45° on the circle rim to near the bottom-right corner
+    hx0 = round(cx + radius * math.cos(math.radians(45)))
+    hy0 = round(cy + radius * math.sin(math.radians(45)))
+    hx1 = size - margin
+    hy1 = size - margin
+    draw.line([hx0, hy0, hx1, hy1], fill=FG_COLOR, width=stroke)
+
+    return img
+
+
+# ── Stdlib fallback (pixel-art magnifying glass, no dependencies) ─────────────
+
+# 9×9 pixel template for a tiny magnifying glass (1 = foreground, 0 = background).
+# Designed to look recognisable even at 16×16 after scaling and centering.
+_GLYPH_9x9 = [
+    [0, 1, 1, 1, 0, 0, 0, 0, 0],
+    [1, 0, 0, 0, 1, 0, 0, 0, 0],
+    [1, 0, 0, 0, 1, 0, 0, 0, 0],
+    [1, 0, 0, 0, 1, 0, 0, 0, 0],
+    [0, 1, 1, 1, 0, 1, 0, 0, 0],
+    [0, 0, 0, 0, 0, 0, 1, 0, 0],
+    [0, 0, 0, 0, 0, 0, 0, 1, 0],
+    [0, 0, 0, 0, 0, 0, 0, 0, 1],
+    [0, 0, 0, 0, 0, 0, 0, 0, 1],
+]
+
+def _make_pixel_grid(size: int) -> list[list[int]]:
+    """
+    Scale the 9×9 glyph to fit `size` and return a size×size pixel grid
+    (0 = background, 1 = foreground).
+    """
+    glyph_size = 9
+    # Fit the glyph with a small margin on all sides
+    margin = max(1, size // 8)
+    draw_size = size - 2 * margin
+    scale = draw_size / glyph_size
+
+    grid = [[0] * size for _ in range(size)]
+    for gy in range(glyph_size):
+        for gx in range(glyph_size):
+            if _GLYPH_9x9[gy][gx] == 0:
+                continue
+            # Map each glyph cell to a block of pixels
+            px0 = margin + round(gx * scale)
+            py0 = margin + round(gy * scale)
+            px1 = margin + round((gx + 1) * scale)
+            py1 = margin + round((gy + 1) * scale)
+            for py in range(py0, min(py1, size)):
+                for px in range(px0, min(px1, size)):
+                    grid[py][px] = 1
+
+    return grid
+
+
+def _make_raw_png(size: int) -> bytes:
+    """
+    Build a valid RGB PNG from a pixel grid using only stdlib.
+    Background = BG_COLOR, foreground = FG_COLOR.
     """
     def chunk(tag: bytes, data: bytes) -> bytes:
         payload = tag + data
         crc = zlib.crc32(payload) & 0xFFFFFFFF
         return struct.pack('>I', len(data)) + payload + struct.pack('>I', crc)
 
-    # One row = filter-byte(0x00) + size × (R, G, B)
-    row = b'\x00' + bytes([r, g, b]) * size
-    raw = row * size                        # all rows identical for a solid colour
-    compressed = zlib.compress(raw, level=9)
+    grid = _make_pixel_grid(size)
+    bg   = bytes(BG_COLOR)
+    fg   = bytes(FG_COLOR)
 
-    # IHDR data: width, height, bit-depth(8), colour-type(2=RGB), compression(0),
-    #            filter(0), interlace(0)
+    raw = b''
+    for row in grid:
+        raw += b'\x00'                    # PNG filter byte (None)
+        for pixel in row:
+            raw += fg if pixel else bg
+
     ihdr = struct.pack('>IIBBBBB', size, size, 8, 2, 0, 0, 0)
-
     return (
-        b'\x89PNG\r\n\x1a\n'   # PNG file signature
+        b'\x89PNG\r\n\x1a\n'
         + chunk(b'IHDR', ihdr)
-        + chunk(b'IDAT', compressed)
+        + chunk(b'IDAT', zlib.compress(raw, level=9))
         + chunk(b'IEND', b'')
     )
 
 
+# ── Entry point ───────────────────────────────────────────────────────────────
+
 if __name__ == '__main__':
-    os.makedirs('extension/icons', exist_ok=True)
+    os.makedirs(OUTPUT_DIR, exist_ok=True)
+    used_pillow = False
 
-    # Dark navy — matches #1e1e2e (the popup background) approximately
-    ICON_R, ICON_G, ICON_B = 30, 30, 46
+    for size in SIZES:
+        path = f'{OUTPUT_DIR}/icon{size}.png'
+        img  = _draw_with_pillow(size)
+        if img is not None:
+            img.save(path)
+            used_pillow = True
+        else:
+            with open(path, 'wb') as f:
+                f.write(_make_raw_png(size))
+        print(f'  {path}  ({size}x{size})')
 
-    for size in (16, 48, 128):
-        path = f'extension/icons/icon{size}.png'
-        with open(path, 'wb') as f:
-            f.write(make_png(size, ICON_R, ICON_G, ICON_B))
-        print(f'  created {path}  ({size}×{size})')
-
-    print('Done. Load extension in Chrome: Settings > Extensions > Load unpacked > select extension/')
+    print()
+    if used_pillow:
+        print('Done - magnifying glass icons created with Pillow.')
+    else:
+        print('Done - pixel-art magnifying glass icons created (stdlib only).')
+        print('For smoother icons, run:  pip install Pillow  then re-run this script.')
