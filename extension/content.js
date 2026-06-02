@@ -1,5 +1,9 @@
 'use strict';
 
+// Firefox uses browser.* instead of chrome.* for extension APIs.
+// This one line makes chrome.* work in Firefox without a separate polyfill file.
+if (typeof browser !== 'undefined') globalThis.chrome = browser;
+
 // ─── What this file does ──────────────────────────────────────────────────────
 // content.js is injected into every http/https page the user visits.
 // It listens for messages from background.js and manages the popup DOM.

@@ -9,11 +9,12 @@
     "activeTab"
   ],
   "host_permissions": [
-    "http://18.144.144.119/*"
+    "*://18.144.144.119/*"
   ],
 
   "background": {
-    "service_worker": "background.js"
+    "service_worker": "background.js",
+    "scripts": ["background.js"]
   },
 
   "content_scripts": [
@@ -29,5 +30,12 @@
     "16":  "icons/icon16.png",
     "48":  "icons/icon48.png",
     "128": "icons/icon128.png"
+  },
+
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "linkscout@linkscout",
+      "strict_min_version": "109.0"
+    }
   }
 }
