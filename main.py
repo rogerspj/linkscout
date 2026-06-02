@@ -37,15 +37,23 @@ app = FastAPI(
 # call an API on a different origin (localhost:8000). This is the Same-Origin Policy.
 # CORSMiddleware adds the HTTP headers that tell the browser our API opts in.
 #
-# SECURITY: This allows only the local Vite dev server. Before deploying to EC2,
-# replace "http://localhost:5173" with the real production frontend URL.
-# Never use allow_origins=["*"] in production — it lets any website call your API.
+# Why allow_origin_regex for extensions?
+# Chrome's background service worker doesn't send an Origin header, so CORS never
+# fires and allow_origins covers it. Firefox's background page IS a normal web page
+# context — it sends Origin: moz-extension://[uuid] on every request, triggering a
+# CORS preflight. The uuid changes per installation so we can't whitelist it exactly;
+# allow_origin_regex matches any browser-extension origin instead.
+#
+# SECURITY: allow_origins still blocks arbitrary websites. The regex only opens up
+# browser-extension origins (chrome-extension:// and moz-extension://), which are
+# controlled environments — a random website cannot spoof them.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
         "http://localhost:5173",      # local Vite dev server
         "http://18.144.144.119",      # EC2 production server
     ],
+    allow_origin_regex=r"(chrome|moz)-extension://.*",  # browser extension backgrounds
     allow_methods=["GET", "POST"],
     allow_headers=["Content-Type"],
 )

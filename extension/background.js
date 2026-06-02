@@ -1,5 +1,9 @@
 'use strict';
 
+// Firefox uses browser.* instead of chrome.* for extension APIs.
+// This one line makes chrome.* work in Firefox without a separate polyfill file.
+if (typeof browser !== 'undefined') globalThis.chrome = browser;
+
 // ─── Configuration ────────────────────────────────────────────────────────────
 // One constant to change if the backend moves.
 const API_BASE = 'http://18.144.144.119';
@@ -56,10 +60,11 @@ chrome.runtime.onMessage.addListener((msg, sender) => {
 });
 
 // ─── API fetch ────────────────────────────────────────────────────────────────
-// This runs in the background service worker, NOT in the page context.
-// That's the key reason CORS isn't a problem here: service workers are not
-// subject to the Same-Origin Policy the way browser page scripts are.
-// The host_permissions entry in manifest.json grants fetch access to this origin.
+// Runs in the background context (service worker in Chrome, background page in Firefox).
+// Both browsers bypass CORS for fetch requests to URLs listed in host_permissions —
+// Chrome because service workers aren't subject to the Same-Origin Policy,
+// Firefox because it grants cross-origin access to host_permissions URLs even in
+// page contexts. The "*://18.144.144.119/*" pattern in manifest.json covers this.
 async function fetchAndSend(url, tabId) {
   try {
     const response = await fetch(`${API_BASE}/api/check`, {
